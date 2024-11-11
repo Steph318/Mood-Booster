@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Audio Recorder</title>
+</head>
+<body>
+    <button onclick="startRecording()">Start Recording</button>
+    <button onclick="stopRecording()">Stop Recording</button>
+    <p id="status">Status: Ready to record.</p> <!-- Pour afficher le statut -->
+
+    <script>
+        const recordAudio = () =>
+            new Promise(async (resolve, reject) => {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    const mediaRecorder = new MediaRecorder(stream);
+                    const audioChunks = [];
+
+                    mediaRecorder.addEventListener("dataavailable", event => {
+                        audioChunks.push(event.data);
+                    });
+
+                    const start = () => mediaRecorder.start();
+
+                    const stop = () =>
+                        new Promise(resolve => {
+                            mediaRecorder.addEventListener("stop", () => {
+                                const audioBlob = new Blob(audioChunks);
+                                const audioUrl = URL.createObjectURL(audioBlob);
+                                const audio = new Audio(audioUrl);
+                                const play = () => audio.play();
+                                resolve({ audioBlob, audioUrl, play });
+                            });
+
+                            mediaRecorder.stop();
+                        });
+
+                    resolve({ start, stop });
+                } catch (error) {
+                    console.error("Error accessing microphone:", error);
+                    document.getElementById("status").innerText = "Error: Microphone access denied.";
+                    reject(error);
+                }
+            });
+
+        let recorder;
+        let audio;
+
+        async function startRecording() {
+            document.getElementById("status").innerText = "Recording...";
+            try {
+                recorder = await recordAudio();
+                recorder.start();
+                console.log("Recording started");
+            } catch (error) {
+                console.error("Failed to start recording:", error);
+            }
+        }
+
+        async function stopRecording() {
+            document.getElementById("status").innerText = "Processing audio...";
+            try {
+                audio = await recorder.stop();
+                console.log("Recording stopped");
+
+                const reader = new FileReader();
+                reader.readAsDataURL(audio.audioBlob); 
+                reader.onloadend = function() {
+                    const base64data = reader.result;
+                    console.log("Sending audio data to Streamlit");
+                    window.parent.postMessage(base64data, "*");
+                }
+            } catch (error) {
+                console.error("Failed to stop recording:", error);
+                document.getElementById("status").innerText = "Error: Failed to process audio.";
+            }
+        }
+    </script>
+</body>
+</html>
