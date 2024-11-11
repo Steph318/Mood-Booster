@@ -1,56 +1,58 @@
 import streamlit as st
-from openai import OpenAI
+import requests
 
 # Show title and description.
 st.title("💬 Chatbot")
 st.write(
-    "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
+    "This is a simple chatbot that uses Hugging Face's model to generate responses. "
+    "To use this app, you need to provide a Hugging Face API key once."
 )
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
+# Ask user for their Hugging Face API key if it's not already stored.
+if "hf_api_key" not in st.session_state:
+    hf_api_key = st.text_input("Hugging Face API Key", type="password")
+    if hf_api_key:
+        # Store the API key in session state and reload to hide the input field.
+        st.session_state.hf_api_key = hf_api_key
+        # st.experimental_rerun()
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
-
-    # Create a session state variable to store the chat messages. This ensures that the
-    # messages persist across reruns.
+# Proceed with the chat interface only if the API key is available in session state.
+if "hf_api_key" in st.session_state:
+    # Initialize chat messages in session state if not already present.
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Display the existing chat messages via `st.chat_message`.
+    # Display the chat messages stored in session state.
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
-
-        # Store and display the current prompt.
+    # Chat input for the user.
+    if prompt := st.chat_input("Ask a question based on the context"):
+        # Add user's message to chat history and display it.
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Generate a response using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
-        )
+        # Set up Hugging Face API request.
+        headers = {"Authorization": f"Bearer {st.session_state.hf_api_key}"}
+        api_url = "https://api-inference.huggingface.co/models/deepset/roberta-base-squad2"
+        data = {
+            "inputs": {
+                "question": prompt,
+                "context": "Provide a relevant context here for the question."
+            }
+        }
 
-        # Stream the response to the chat using `st.write_stream`, then store it in 
-        # session state.
-        with st.chat_message("assistant"):
-            response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        response = requests.post(api_url, headers=headers, json=data)
+
+        # Display the assistant's response if the request was successful.
+        if response.status_code == 200:
+            assistant_message = response.json().get('answer', "I'm not sure how to answer that.")
+            st.session_state.messages.append({"role": "assistant", "content": assistant_message})
+            with st.chat_message("assistant"):
+                st.markdown(assistant_message)
+        else:
+            st.error(f"Error: {response.status_code} - {response.text}")
+else:
+    st.info("Please enter your Hugging Face API key to access the chat.", icon="🗝️")
