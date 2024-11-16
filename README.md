@@ -10,7 +10,7 @@ Implemented by [Damaris](https://www.linkedin.com/in/ndams55/), <br/>
 
 
 ## Features & Specs
-- [It will come] **browser's Media-API**<br>
+-  **[It will come]**<br>
 
 ## Setup & How to Use
 **1.** PIP Install the component (download from PyPI)
